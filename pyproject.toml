@@ -1,0 +1,17 @@
+[project]
+name = "connstrlint"
+version = "0.1.0"
+description = "Find connection strings in your files and flag risky settings."
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "markw49" }]
+
+[project.scripts]
+connstrlint = "connstrlint.cli:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["connstrlint*"]
