@@ -87,6 +87,12 @@ keys won't be reassembled. It also only looks at what a regex can find on a sing
 line. Good enough to catch what's actually in the file; not a guarantee nothing was
 missed.
 
+## Tests
+
+```
+python -m unittest discover
+```
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
