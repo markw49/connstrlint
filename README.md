@@ -84,8 +84,10 @@ A value is treated as a placeholder rather than a real secret if it looks like
 This is a line-scanning heuristic, not a real parser for every config file format - it
 does not understand YAML/JSON structure, so a connection string split across multiple
 keys won't be reassembled. It also only looks at what a regex can find on a single
-line. Good enough to catch what's actually in the file; not a guarantee nothing was
-missed.
+line, with one exception: in `.env` files, a quoted value that opens on one line and
+closes on a later one (`CONN="Server=...;\nPassword=...;"`) is joined before scanning,
+since that's a common way long ADO.NET/ODBC strings end up formatted in `.env` files.
+Good enough to catch what's actually in the file; not a guarantee nothing was missed.
 
 ## Tests
 

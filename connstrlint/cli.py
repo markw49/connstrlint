@@ -50,18 +50,79 @@ CANDIDATE_KV_RE = re.compile(
     rf"(?i)\b(?:{KV_KEYS})\s*=\s*[^;]+(?:;\s*(?:{KV_KEYS})\s*=\s*[^;]*)+;?"
 )
 
+# Matches the start of a .env-style assignment whose value opens with a
+# quote, e.g. `DATABASE_URL="` or `export CONN='`.
+ENV_ASSIGNMENT_RE = re.compile(r"^\s*(?:export\s+)?[A-Za-z_][A-Za-z0-9_.]*\s*=\s*(['\"])")
 
-def iter_candidates(line: str):
-    """Yield (column, text) for each connection-string-shaped chunk in a line."""
-    for match in URL_TOKEN_RE.finditer(line):
+
+def iter_candidates(text: str):
+    """Yield (offset, text) for each connection-string-shaped chunk in text."""
+    for match in URL_TOKEN_RE.finditer(text):
         token = match.group(0).rstrip(".,;\"')")
         scheme = token.split("://", 1)[0].lower()
         base_scheme = scheme[5:] if scheme.startswith("jdbc:") else scheme
         if base_scheme in KNOWN_URL_SCHEMES:
-            yield match.start() + 1, token
+            yield match.start(), token
 
-    for match in CANDIDATE_KV_RE.finditer(line):
-        yield match.start() + 1, match.group(0)
+    for match in CANDIDATE_KV_RE.finditer(text):
+        yield match.start(), match.group(0)
+
+
+def _quote_closes(text: str, quote: str) -> bool:
+    """True if an unescaped `quote` appears somewhere in text."""
+    escaped = False
+    for char in text:
+        if escaped:
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif char == quote:
+            return True
+    return False
+
+
+def merge_env_continuations(lines):
+    """Join KEY="...\\n...\\n..." style .env values that span physical
+    lines into a single logical block, so a connection string that was
+    wrapped across lines for readability is still seen as one candidate.
+
+    Yields (start_line_no, text) pairs. Lines that aren't part of an
+    unterminated quoted assignment pass through unchanged, one at a time.
+    """
+    count = len(lines)
+    i = 0
+    while i < count:
+        line = lines[i].rstrip("\n")
+        start_no = i + 1
+        match = ENV_ASSIGNMENT_RE.match(line)
+        if match and not _quote_closes(line[match.end():], match.group(1)):
+            quote = match.group(1)
+            buffer = [line]
+            i += 1
+            while i < count:
+                cont = lines[i].rstrip("\n")
+                buffer.append(cont)
+                i += 1
+                if _quote_closes(cont, quote):
+                    break
+            yield start_no, "\n".join(buffer)
+        else:
+            yield start_no, line
+            i += 1
+
+
+def _locate(start_no: int, text: str, offset: int):
+    """Map a character offset within a (possibly multi-line) block back
+    to the actual (line_no, column) it came from."""
+    line_no = start_no
+    line_start = 0
+    for part in text.split("\n"):
+        line_end = line_start + len(part)
+        if offset <= line_end:
+            return line_no, offset - line_start + 1
+        line_start = line_end + 1  # +1 for the '\n' that joined the lines
+        line_no += 1
+    return line_no, offset - line_start + 1
 
 
 def scan_file(path: str):
@@ -73,11 +134,17 @@ def scan_file(path: str):
         print(f"{path}: could not read file ({exc})", file=sys.stderr)
         return
 
-    for line_no, line in enumerate(lines, start=1):
-        for column, candidate in iter_candidates(line):
+    if os.path.splitext(path)[1].lower() == ".env":
+        blocks = merge_env_continuations(lines)
+    else:
+        blocks = ((i + 1, line.rstrip("\n")) for i, line in enumerate(lines))
+
+    for start_no, text in blocks:
+        for offset, candidate in iter_candidates(text):
             conn = parse(candidate)
             if conn is None:
                 continue
+            line_no, column = _locate(start_no, text, offset)
             for finding in run_rules(conn):
                 yield line_no, column, finding
 
