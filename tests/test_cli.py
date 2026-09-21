@@ -1,6 +1,9 @@
+import io
+import json
 import os
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 
 from connstrlint import cli
 
@@ -92,6 +95,56 @@ class ScanFileEnvTests(unittest.TestCase):
         )
         findings = list(cli.scan_file(path))
         self.assertEqual(findings, [])
+
+
+class MainJsonFormatTests(unittest.TestCase):
+    def _write(self, suffix, content):
+        handle = tempfile.NamedTemporaryFile(
+            mode="w", suffix=suffix, delete=False, encoding="utf-8"
+        )
+        try:
+            handle.write(content)
+        finally:
+            handle.close()
+        self.addCleanup(os.unlink, handle.name)
+        return handle.name
+
+    def test_json_output_is_a_list_of_findings(self):
+        path = self._write(
+            ".ini",
+            "conn = Server=sqlsrv01;Database=orders;User Id=sa;Password=changeme123;"
+            "TrustServerCertificate=true;\n",
+        )
+        out = io.StringIO()
+        with redirect_stdout(out):
+            exit_code = cli.main(["--format", "json", path])
+
+        payload = json.loads(out.getvalue())
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(len(payload) >= 4)
+        rule_ids = {item["rule_id"] for item in payload}
+        self.assertIn("CS004", rule_ids)
+        first = payload[0]
+        self.assertEqual(first["path"], path)
+        self.assertEqual(set(first), {"path", "line", "column", "rule_id", "severity", "message"})
+
+    def test_json_output_is_empty_list_when_nothing_found(self):
+        path = self._write(".ini", "just some plain text with no connection strings\n")
+        out = io.StringIO()
+        with redirect_stdout(out):
+            exit_code = cli.main(["--format", "json", path])
+
+        self.assertEqual(json.loads(out.getvalue()), [])
+        self.assertEqual(exit_code, 0)
+
+    def test_text_format_is_still_the_default(self):
+        path = self._write(".ini", "just some plain text with no connection strings\n")
+        out = io.StringIO()
+        with redirect_stdout(out):
+            exit_code = cli.main([path])
+
+        self.assertEqual(out.getvalue().strip(), "no findings")
+        self.assertEqual(exit_code, 0)
 
 
 if __name__ == "__main__":

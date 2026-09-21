@@ -2,6 +2,7 @@
 parse it, run the rules, print findings as path:line:col."""
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -161,6 +162,54 @@ def collect_files(paths):
                     yield os.path.join(root, name)
 
 
+SEVERITY_RANK = {"info": 0, "warning": 1, "error": 2}
+
+
+def _collect_results(paths):
+    """Return (results, highest_severity) where results is a list of
+    (path, line_no, column, finding) tuples in scan order."""
+    results = []
+    highest_severity = None
+    for path in collect_files(paths):
+        for line_no, column, finding in scan_file(path):
+            results.append((path, line_no, column, finding))
+            if (
+                highest_severity is None
+                or SEVERITY_RANK[finding.severity] > SEVERITY_RANK[highest_severity]
+            ):
+                highest_severity = finding.severity
+    return results, highest_severity
+
+
+def _print_text(results):
+    for path, line_no, column, finding in results:
+        print(
+            f"{path}:{line_no}:{column}: [{finding.severity.upper()}] "
+            f"{finding.rule_id} {finding.message}"
+        )
+
+    if not results:
+        print("no findings")
+        return
+
+    print(f"\n{len(results)} finding(s)")
+
+
+def _print_json(results):
+    payload = [
+        {
+            "path": path,
+            "line": line_no,
+            "column": column,
+            "rule_id": finding.rule_id,
+            "severity": finding.severity,
+            "message": finding.message,
+        }
+        for path, line_no, column, finding in results
+    ]
+    print(json.dumps(payload, indent=2))
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="connstrlint",
@@ -169,30 +218,23 @@ def main(argv=None) -> int:
     parser.add_argument(
         "paths", nargs="+", help="files or directories to scan"
     )
+    parser.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
     args = parser.parse_args(argv)
 
-    highest_severity = None
-    severity_rank = {"info": 0, "warning": 1, "error": 2}
-    total_findings = 0
+    results, highest_severity = _collect_results(args.paths)
 
-    for path in collect_files(args.paths):
-        for line_no, column, finding in scan_file(path):
-            total_findings += 1
-            if (
-                highest_severity is None
-                or severity_rank[finding.severity] > severity_rank[highest_severity]
-            ):
-                highest_severity = finding.severity
-            print(
-                f"{path}:{line_no}:{column}: [{finding.severity.upper()}] "
-                f"{finding.rule_id} {finding.message}"
-            )
+    if args.format == "json":
+        _print_json(results)
+    else:
+        _print_text(results)
 
-    if total_findings == 0:
-        print("no findings")
+    if not results:
         return 0
-
-    print(f"\n{total_findings} finding(s)")
     return 1 if highest_severity == "error" else 0
 
 

@@ -58,6 +58,25 @@ extension.
 The process exits `1` if any finding is severity `error`, `0` otherwise, so it can be
 wired into CI as a gate on the errors while leaving warnings and info as visible noise.
 
+Pass `--format json` to get findings as a JSON array instead, one object per finding
+with `path`, `line`, `column`, `rule_id`, `severity`, and `message` keys - useful for
+feeding into another tool rather than reading in a terminal:
+
+```
+$ connstrlint --format json settings.ini
+[
+  {
+    "path": "settings.ini",
+    "line": 2,
+    "column": 11,
+    "rule_id": "CS001",
+    "severity": "warning",
+    "message": "password is stored in plain text in the connection string"
+  },
+  ...
+]
+```
+
 ## Rules
 
 | ID    | Severity | Checks for |
