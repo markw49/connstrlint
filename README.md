@@ -42,12 +42,13 @@ Running:
 $ connstrlint settings.ini
 settings.ini:2:11: [WARNING] CS001 password is stored in plain text in the connection string
 settings.ini:2:11: [WARNING] CS003 no SSL/TLS option set - traffic may be sent unencrypted
+settings.ini:2:11: [INFO] CS006 host is exposed on the default postgres port (5432) - it's the first port an automated scanner probes
 settings.ini:3:10: [WARNING] CS001 password is stored in plain text in the connection string
 settings.ini:3:10: [WARNING] CS003 no SSL/TLS option set - traffic may be sent unencrypted
 settings.ini:3:10: [ERROR] CS004 TrustServerCertificate is enabled, which skips certificate validation and allows man-in-the-middle attacks
 settings.ini:3:10: [INFO] CS005 'sa' is a default/administrative account name
 
-6 finding(s)
+7 finding(s)
 ```
 
 Point it at a directory and it walks it, scanning files with common config extensions
@@ -86,6 +87,7 @@ $ connstrlint --format json settings.ini
 | CS003 | warning  | no SSL/TLS related option set on a connection string that supports one |
 | CS004 | error    | `TrustServerCertificate=true` (or equivalent), which disables certificate validation |
 | CS005 | info     | a default/administrative account name (`sa`, `root`, `admin`, ...) |
+| CS006 | info     | a URL-style connection left on the scheme's default port (5432 for postgres, 3306 for mysql, 27017 for mongodb, ...) |
 
 A value is treated as a placeholder rather than a real secret if it looks like
 `${DB_PASSWORD}`, `%DB_PASSWORD%`, `$DB_PASSWORD`, `<password>`, or an

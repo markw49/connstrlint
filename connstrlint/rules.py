@@ -29,6 +29,21 @@ SSL_SCHEMES = {
 
 SSL_OPTION_KEYS = {"sslmode", "ssl", "tls", "ssl_mode", "require_ssl"}
 
+# Ports a scanner tries first, in order, before it bothers with anything else.
+DEFAULT_PORTS = {
+    "postgres": 5432,
+    "postgresql": 5432,
+    "mysql": 3306,
+    "mongodb": 27017,
+    "redis": 6379,
+    "amqp": 5672,
+    "sqlserver": 1433,
+    "mssql": 1433,
+    "oracle": 1521,
+    "ldap": 389,
+    "ldaps": 636,
+}
+
 
 @dataclass
 class Finding:
@@ -121,12 +136,30 @@ def rule_default_account(conn: ConnectionString):
     return []
 
 
+def rule_default_port(conn: ConnectionString):
+    if conn.style != "url" or conn.port is None:
+        return []
+    base_scheme = (conn.scheme or "").replace("jdbc:", "")
+    expected = DEFAULT_PORTS.get(base_scheme)
+    if expected is not None and conn.port == expected:
+        return [
+            Finding(
+                "CS006",
+                "info",
+                f"host is exposed on the default {base_scheme} port ({expected}) - "
+                "it's the first port an automated scanner probes",
+            )
+        ]
+    return []
+
+
 ALL_RULES = (
     rule_plaintext_password,
     rule_empty_password,
     rule_missing_ssl,
     rule_trust_server_certificate,
     rule_default_account,
+    rule_default_port,
 )
 
 

@@ -123,6 +123,34 @@ class DefaultAccountTests(unittest.TestCase):
         self.assertEqual(rules.rule_default_account(make_conn()), [])
 
 
+class DefaultPortTests(unittest.TestCase):
+    def test_flags_default_port_for_known_scheme(self):
+        conn = make_conn(scheme="postgres", port=5432)
+        findings = rules.rule_default_port(conn)
+        self.assertEqual([f.rule_id for f in findings], ["CS006"])
+
+    def test_non_default_port_is_not_flagged(self):
+        conn = make_conn(scheme="postgres", port=5433)
+        self.assertEqual(rules.rule_default_port(conn), [])
+
+    def test_no_port_is_not_flagged(self):
+        conn = make_conn(scheme="postgres", port=None)
+        self.assertEqual(rules.rule_default_port(conn), [])
+
+    def test_jdbc_prefix_is_stripped_before_checking_port(self):
+        conn = make_conn(scheme="jdbc:mysql", port=3306)
+        findings = rules.rule_default_port(conn)
+        self.assertEqual([f.rule_id for f in findings], ["CS006"])
+
+    def test_unknown_scheme_is_not_flagged(self):
+        conn = make_conn(scheme="http", port=80)
+        self.assertEqual(rules.rule_default_port(conn), [])
+
+    def test_kv_style_is_ignored(self):
+        conn = make_conn(style="kv", scheme=None, host="sqlsrv01", port=1433)
+        self.assertEqual(rules.rule_default_port(conn), [])
+
+
 class RunRulesTests(unittest.TestCase):
     def test_aggregates_findings_from_every_rule(self):
         conn = make_conn(
