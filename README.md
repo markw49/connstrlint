@@ -56,8 +56,10 @@ Point it at a directory and it walks it, scanning files with common config exten
 `.properties`, `.xml`). Pass a specific file directly and it's scanned regardless of
 extension.
 
-The process exits `1` if any finding is severity `error`, `0` otherwise, so it can be
-wired into CI as a gate on the errors while leaving warnings and info as visible noise.
+By default the process exits `1` if any finding is severity `error`, `0` otherwise, so
+it can be wired into CI as a gate on the errors while leaving warnings and info as
+visible noise. `--fail-on info|warning|error` moves that threshold (a finding at or
+above it fails the run), and `--fail-on none` always exits `0`.
 
 Pass `--format json` to get findings as a JSON array instead, one object per finding
 with `path`, `line`, `column`, `rule_id`, `severity`, and `message` keys - useful for

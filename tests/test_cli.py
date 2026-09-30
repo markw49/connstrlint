@@ -147,5 +147,42 @@ class MainJsonFormatTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
 
 
+class MainFailOnTests(unittest.TestCase):
+    def _run(self, content, *flags):
+        handle = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".ini", delete=False, encoding="utf-8"
+        )
+        try:
+            handle.write(content)
+        finally:
+            handle.close()
+        self.addCleanup(os.unlink, handle.name)
+        with redirect_stdout(io.StringIO()):
+            return cli.main([*flags, handle.name])
+
+    # warnings only: plaintext password and no ssl option, nothing at error level
+    WARNING_ONLY = "conn = Server=db1;Database=orders;User Id=app;Password=changeme123;\n"
+
+    def test_default_ignores_warnings(self):
+        self.assertEqual(self._run(self.WARNING_ONLY), 0)
+
+    def test_fail_on_warning_trips_on_warnings(self):
+        self.assertEqual(self._run(self.WARNING_ONLY, "--fail-on", "warning"), 1)
+
+    def test_fail_on_error_does_not_trip_on_warnings(self):
+        self.assertEqual(self._run(self.WARNING_ONLY, "--fail-on", "error"), 0)
+
+    def test_fail_on_info_trips_on_any_finding(self):
+        content = "conn = postgres://app@db:5432/x?sslmode=require\n"
+        self.assertEqual(self._run(content, "--fail-on", "info"), 1)
+
+    def test_fail_on_none_never_fails(self):
+        content = self.WARNING_ONLY.rstrip("\n") + "TrustServerCertificate=true;\n"
+        self.assertEqual(self._run(content, "--fail-on", "none"), 0)
+
+    def test_no_findings_exits_zero_even_at_info(self):
+        self.assertEqual(self._run("nothing here\n", "--fail-on", "info"), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

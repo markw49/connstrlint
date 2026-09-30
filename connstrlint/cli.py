@@ -224,6 +224,13 @@ def main(argv=None) -> int:
         default="text",
         help="output format (default: text)",
     )
+    parser.add_argument(
+        "--fail-on",
+        choices=(*SEVERITY_RANK, "none"),
+        default="error",
+        help="exit 1 if any finding is at or above this severity; "
+        "'none' always exits 0 (default: error)",
+    )
     args = parser.parse_args(argv)
 
     results, highest_severity = _collect_results(args.paths)
@@ -233,9 +240,9 @@ def main(argv=None) -> int:
     else:
         _print_text(results)
 
-    if not results:
+    if highest_severity is None or args.fail_on == "none":
         return 0
-    return 1 if highest_severity == "error" else 0
+    return 1 if SEVERITY_RANK[highest_severity] >= SEVERITY_RANK[args.fail_on] else 0
 
 
 if __name__ == "__main__":
